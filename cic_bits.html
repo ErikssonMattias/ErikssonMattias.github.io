@@ -1,0 +1,188 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1" crossorigin="anonymous">
+    <title>Demo</title>
+</head>
+<body>
+	N: <input type="number" id="order" value="3" /><br />
+	R: <input type="number" id="rate" value="8" /><br />
+	M: <input type="number" id="delay" value="1" /><br />
+	Bin: <input type="number" id="Bin" value="12" /><br />
+	Bout: <input type="number" id="Bout" value="12" /><br />
+    <button id="runButton">Run</button><br />
+	<button id="clearButton">Clear</button><br />
+	<div id="resultDiv">
+	</div>
+    <script src="jquery-3.5.1.js"></script>
+	
+	<script>
+
+function choose(n, k) {
+    if (k === 0) return 1;
+    return (n * choose(n-1, k-1)) / k;
+}
+
+function sum_sqr(arr) {
+  var s = 0;
+  for (var i=0; i<arr.length; i++) {
+  	s += arr[i] * arr[i];
+  }
+  
+  return s;
+}
+
+function showResult(i, Fj, MlFj, Bj, BnoT) {
+	console.log("%d %f %f", i, Bj, BnoT);
+}
+
+function cic_bit_growth(N, R, M, Bin, Bout)
+{
+	var F_sub_j = new Array(N-1);
+	for (var j=N-2; j>=0; j--) {
+    var h_sub_j = new Array((R*M-1)*N + j + 1).fill(0);
+    
+    for (var k=0; k<=((R*M-1)*N + j); k++) {
+      var L_loop_max = Math.floor(k / (R*M));
+      //console.log("L_loop_max: " + L_loop_max);
+      for (var L=0; L<=L_loop_max; L++) {
+	  //console.log(L);
+      	var change_to_res = ((L & 1) ? -1 : 1) * choose(N, L) * choose(N-(j+1)+k-R*M*L, k-R*M*L);
+		//console.log(change_to_res);
+        //console.log(change_to_res);
+        h_sub_j[k] = h_sub_j[k] + change_to_res;
+      }
+    }
+    
+    //console.log(h_sub_j);
+    
+	console.log("Add idx " + j);
+    F_sub_j[j] = Math.sqrt(sum_sqr(h_sub_j));
+    
+    //console.log(F_sub_j);
+  }
+  
+  F_sub_j_for_many_combs = [2, 6, 20, 70, 252, 924, 3432].map(n => Math.sqrt(n));
+  
+  //console.log(F_sub_j);
+  
+  F_sub_j[N-1] = F_sub_j_for_many_combs[N-2] * Math.sqrt(R*M); // Last integrator
+  
+  //console.log(F_sub_j);
+  
+  for (var j=2*N-1; j>=N; j--) {
+  	F_sub_j[j] = F_sub_j_for_many_combs[2*N - j - 1];
+  }
+  
+  F_sub_j[2*N] = 1; // Final output register truncation
+  
+  console.log(F_sub_j);
+  
+  Minus_log2_of_F_sub_j = F_sub_j.map(n => -Math.log2(n));
+  
+  //console.log(Minus_log2_of_F_sub_j);
+  
+  CIC_filter_gain = Math.pow(R*M, N);
+  Num_of_Bits_Growth = Math.ceil(Math.log2(CIC_filter_gain));
+  Num_Output_Bits_With_No_Truncation = Num_of_Bits_Growth + Bin;
+  Num_of_Output_Bits_Truncated = Num_Output_Bits_With_No_Truncation -Bout;
+  Output_Truncation_Noise_Variance = Math.pow(Math.pow(2, Num_of_Output_Bits_Truncated), 2) / 12;
+  
+  console.log("Gain: " + CIC_filter_gain);
+  console.log("Bits growth: " + Num_of_Bits_Growth);
+  console.log("Out bits no trunc: " + Num_Output_Bits_With_No_Truncation);
+  console.log("Out bits trunc: " + Num_of_Output_Bits_Truncated);
+  console.log("Out trunc noise variance: " + Output_Truncation_Noise_Variance);
+  
+  Output_Truncation_Noise_Standard_Deviation = Math.sqrt(Output_Truncation_Noise_Variance);
+  Log_base2_of_Output_Truncation_Noise_Standard_Deviation = Math.log2(Output_Truncation_Noise_Standard_Deviation);
+  
+  Half_Log_Base2_of_6_over_N = 0.5*Math.log2(6/N);
+  
+  //B_sub_j = Math.floor(Minus_log2_of_F_sub_j +
+  //        Log_base2_of_Output_Truncation_Noise_Standard_Deviation +
+  //        Half_Log_Base2_of_6_over_N);
+  
+  B_sub_j = Minus_log2_of_F_sub_j.map(n => Math.floor(n +
+          Log_base2_of_Output_Truncation_Noise_Standard_Deviation +
+          Half_Log_Base2_of_6_over_N));
+		  
+	var table = $('<table>').addClass('table table-striped');
+	
+	
+	
+	var tableHead = $('<thead>');
+	
+	var headerRow = $('<tr>');
+	headerRow.append($('<th>').text('N=' + N + ", R=" + R + ", M=" + M + ", Bin=" + Bin + ", Bout=" + Bout).attr("colspan", "3"));
+	tableHead.append(headerRow);
+	
+	var headerRow = $('<tr>');
+	headerRow.append($('<th>').text('Stage').attr("scope", "col"));
+	headerRow.append($('<th>').text('Bj').attr("scope", "col"));
+	headerRow.append($('<th>').text('Accum (adder) width').attr("scope", "col"));
+	tableHead.append(headerRow);
+	
+	table.append(tableHead);
+	
+	var tableBody = $('<tbody>');
+
+	for(i=0; i<2*N; i++){
+		var row = $('<tr>');
+		row.append($('<th>').text(i+1).attr("scope", "row"));
+		row.append($('<td>').text(B_sub_j[i]));
+		row.append($('<td>').text(Num_Output_Bits_With_No_Truncation -B_sub_j[i]));
+		tableBody.append(row);
+	}
+	
+	var row = $('<tr>');
+	row.append($('<th>').text(2*N + 1).attr("scope", "row"));
+	row.append($('<td>').text(Num_of_Output_Bits_Truncated));
+	row.append($('<td>').text(Bout + " (final truncation)"));
+	tableBody.append(row);
+	
+	table.append(tableBody);
+
+	$('#resultDiv').prepend(table);
+          
+  for (var i=0; i<2*N; i++) {
+  	showResult(i, F_sub_j[i], Minus_log2_of_F_sub_j[j], B_sub_j[i], 
+    	Num_Output_Bits_With_No_Truncation -B_sub_j[i]);
+  }
+  
+  showResult(2*N, 1, 0, Num_of_Output_Bits_Truncated, 
+    	Bout);
+}
+
+//cic_bit_growth(3, 256, 1, 16, 16);
+//cic_bit_growth(3, 256, 1, 14, 16);
+//cic_bit_growth(3, 8, 1, 12, 12);
+
+</script>
+	
+    <script>
+ 
+    $( document ).ready(function() {
+        $( "#runButton" ).click(function( event ) {
+            //cic_bit_growth(3, 8, 1, 12, 12);
+			//cic_bit_growth(4, 64, 1, 12, 16);
+			cic_bit_growth(
+				parseInt($('#order').val()), 
+				parseInt($('#rate').val()), 
+				parseInt($('#delay').val()), 
+				parseInt($('#Bin').val()), 
+				parseInt($('#Bout').val()));
+        });
+		
+		$( "#clearButton" ).click(function( event ) {
+            $('#resultDiv').empty();
+        });
+    });
+ 
+    </script>
+</body>
+</html>
+
+
+
